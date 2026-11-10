@@ -43,19 +43,19 @@ Type hint, explain, skip or stop at any time. Ready?
 **Claude Code, for all your projects:**
 
 ```bash
-git clone https://github.com/OWNER/block-quiz.git ~/.claude/skills/block-quiz
+git clone https://github.com/jvhaarst/block-quiz.git ~/.claude/skills/block-quiz
 ```
 
 **Claude Code, for one project** (shared with everyone who clones that project):
 
 ```bash
-git submodule add https://github.com/OWNER/block-quiz.git .claude/skills/block-quiz
+git submodule add https://github.com/jvhaarst/block-quiz.git .claude/skills/block-quiz
 ```
 
 If Claude Code was already running, restart it so it picks up the skill.
 
 **claude.ai:** download `block-quiz.skill` from the
-[latest release](https://github.com/OWNER/block-quiz/releases/latest) and upload
+[latest release](https://github.com/jvhaarst/block-quiz/releases/latest) and upload
 it under Settings → Capabilities → Skills. Code execution has to be on. There is
 no local repository there, so paste a diff or upload a `.diff` or `.patch` file.
 
