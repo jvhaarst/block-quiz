@@ -81,4 +81,6 @@ def test_git_diff_headers_do_not_create_a_second_file():
 
 def test_input_without_any_diff_is_an_error_not_an_empty_map():
     with pytest.raises(RuntimeError, match="no diff found"):
-        change_map.print_git("patch file notes.txt", "just some notes\nnot a diff\n", [])
+        change_map.print_git(
+            "patch file notes.txt", "just some notes\nnot a diff\n", []
+        )

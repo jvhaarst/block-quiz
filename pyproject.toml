@@ -14,3 +14,12 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["scripts"]
+
+[tool.ruff]
+line-length = 88
+src = ["scripts"]
+extend-exclude = ["*.md"]
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
