@@ -1,13 +1,28 @@
 # block-quiz
 
-A skill for Claude that quizzes you on a code change, one logical block at a time.
+[![ci](https://github.com/jvhaarst/block-quiz/actions/workflows/ci.yml/badge.svg)](https://github.com/jvhaarst/block-quiz/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/jvhaarst/block-quiz)](https://github.com/jvhaarst/block-quiz/releases/latest)
+[![license: MIT](https://img.shields.io/github/license/jvhaarst/block-quiz)](LICENSE)
+
+**Do you really understand the pull request you are about to merge?** block-quiz
+is a Claude Code plugin and Agent Skill that quizzes you on a code change, one
+logical block at a time. It works on a pull request, a merge request, a commit, a
+branch, or a diff file.
+
 For each block you explain in your own words what it does. Claude grades your
 answer against what the code actually does, not what the comments claim. When you
 miss, you get hints first, then a line-by-line explanation. At the end you get an
 annotated walkthrough of the whole change.
 
-Use it before you merge something you didn't write, when you review a merge
-request, or to check that you really understand code an AI wrote for you.
+Use it:
+
+- before you merge code you didn't write
+- when you review a pull request or merge request
+- to check that you understand AI-generated code, instead of just accepting it
+- to get to know an unfamiliar part of a codebase through its recent changes
+
+It uses only local git, so it needs no host CLI or API token, and it works with
+GitHub, GitLab, Gitea and Forgejo.
 
 ## How a session goes
 
