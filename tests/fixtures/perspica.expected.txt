@@ -1,0 +1,47 @@
+# Change map
+- Target: feature vs main
+- Detail: 3 commits
+- Title: Cart
+- Analyzer: perspica 0.9
+
+## Files
+- cart.py [modified · source · python] changed 4, mechanical 1
+- a.py -> b.py [renamed · source · python] changed ?, mechanical ? · not parsed: plain line diff
+- x.png [modified · source · ] changed ?, mechanical ? · binary
+- uv.lock [modified · generated · ] changed ?, mechanical ?
+
+## Reading order (entry points first, then what they call)
+- [function] main — cart.py  (calls: total)
+  - [function] total — cart.py
+
+## Classified changes
+- logic #1 function `total` cart.py:4-13 [test]: body changed
+- signature #2 `total` cart.py:4 (old): added arg
+- extracted #3 from `total` into `a`, `b`
+- rename #4 function `calc` -> `total` (mechanical)
+- moved #5 `helper` cart.py:1-2 -> cart.py:9-10 (mechanical)
+- dependency #6 added `math` in cart.py +floor -ceil
+- now unused #7 `old` cart.py:20-22: no callers
+- formatting-only #11 cart.py:30-34: TAX_RATES: formatting/comments only (mechanical)
+- moved across files #8 `f` a.py -> b.py (body edited)
+- signature impact #9 `total`: arity (2 call sites)
+- broken reference #10 `calc` at z.py:3: renamed
+
+## Diff (line numbers: new file for + and context, old file for -)
+
+### cart.py [modified · source]
+
+@@ old 1-5 -> new 1-6 @@  entries: 1, 2  [test]
++     2 | x = 1
+-     3 | [formatting] y = 1
+-     4 | a
++     4 | b
+      5 | z
+
+(skipped hunk old 9-9 -> new 9-9: all comment-only)
+
+### b.py [renamed · source]
+
+### x.png — binary, skipped
+
+### uv.lock — generated, skipped

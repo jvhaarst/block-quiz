@@ -1,6 +1,6 @@
 ---
 name: block-quiz
-description: Walks the user through a code change one logical block at a time. For each block they explain in their own words what it does (restating the code comments doesn't count). Claude grades the answer against the code, gives hints on a miss, then explains the block line by line, and ends with a full annotated walkthrough of the change. Works on a branch, merge request, pull request, commit, commit range, staged or uncommitted changes, or a saved .diff/.patch file, using only local git, so any host works (GitLab, GitHub, Gitea, Forgejo, Bitbucket). Use this whenever the user wants to be quizzed on, tested on, or walked through a diff, MR, PR or commit block by block or line by line, or says things like "quiz me on this change", "walk me through this MR", "do I really understand this diff", "test me before I merge", or "/block-quiz", even if they don't say "block".
+description: Walks the user through a code change one logical block at a time. For each block they explain in their own words what it does (restating the code comments doesn't count). Claude grades the answer against the code, gives hints on a miss, then explains the block line by line, and ends with a full annotated walkthrough of the change. Works on a branch, merge request, pull request, commit, commit range, staged or uncommitted changes, or a saved .diff/.patch file, using only local git, so no host CLI or token is needed (merge and pull requests are fetched from GitLab, GitHub, Gitea and Forgejo; any other host works through a downloaded .diff). Use this whenever the user wants to be quizzed on, tested on, or walked through a diff, MR, PR or commit block by block or line by line, or says things like "quiz me on this change", "walk me through this MR", "do I really understand this diff", "test me before I merge", or "/block-quiz", even if they don't say "block".
 compatibility: Needs git and python3. Uses perspica (https://github.com/sshah03/perspica) for better block boundaries when it is installed, and works without it.
 ---
 
@@ -30,16 +30,24 @@ Read what the user asked for and pick the matching option for the helper script 
 | a range, two branches | `--range main...feature` (three dots = since they diverged, like an MR) |
 | a pasted or uploaded diff, a `.diff` / `.patch` file | `--patch <file>` (no repository needed; save pasted text to a file first) |
 
-**A merge request or pull request by number or URL.** Use plain git so no host CLI or token is needed. Fetch the MR head into a local ref, then diff against the target branch:
+**A merge request or pull request by number or URL.** Use plain git so no host CLI or token is needed. Refresh the target branch, fetch the MR head into a local ref, then diff the two:
 
 ```bash
+# First the target branch, so origin/<target> isn't stale
+git fetch origin <target>
 # GitLab
-git fetch origin merge-requests/<iid>/head:quiz/mr-<iid>
+git fetch origin +refs/merge-requests/<iid>/head:refs/quiz/mr-<iid>
 # GitHub, Gitea, Forgejo
-git fetch origin pull/<n>/head:quiz/pr-<n>
+git fetch origin +refs/pull/<n>/head:refs/quiz/pr-<n>
 ```
 
-Then run the script with `--range origin/<target>...quiz/mr-<iid>`. The target branch is usually the default branch; ask if it isn't obvious. Tell the user the name of the local ref you created. Don't check it out or touch their working tree. When you need the full file at that version, read it with `git show quiz/mr-<iid>:<path>`, not from disk. If the fetch fails (the remote isn't the MR's project, or access is denied), ask the user to check out the branch themselves, or to download the MR's `.diff` and use `--patch`.
+Then run the script with `--range origin/<target>...refs/quiz/mr-<iid>`. The target branch is usually the default branch; ask if it isn't obvious.
+
+- **Keep the `+` and the `refs/quiz/` prefix.** The `+` lets the fetch succeed again after the author force-pushed, which a re-quiz needs. A ref under `refs/quiz/` is not a branch, so it stays out of `git branch` and can't be checked out or pushed by accident.
+- **Pick the remote that owns the MR.** In a fork workflow `origin` is the user's fork and the MR lives on another remote, usually `upstream`. Compare the MR's URL with `git remote -v` and use the matching remote in both fetches and in the range (`upstream/<target>...refs/quiz/mr-<iid>`).
+- Tell the user the name of the local ref you created, and that `git update-ref -d refs/quiz/mr-<iid>` removes it. Don't check it out or touch their working tree.
+- When you need the full file at that version, read it with `git show refs/quiz/mr-<iid>:<path>`, not from disk.
+- If the fetch fails (no remote points at the MR's project, access is denied, or the host has no such refs, as with Bitbucket Cloud), ask the user to check out the branch themselves, or to download the MR's `.diff` and use `--patch`.
 
 ## Step 2: Build the change map
 
@@ -53,6 +61,8 @@ It prints a compact map:
 - the files, each with its role (source, test, docs, generated)
 - with perspica, a **reading order** (entry points first, then what they call) and **classified changes** (logic changes, signature changes, renames, moves, dependencies, newly unused code)
 - the diff with line numbers (`+` and context use new-file numbers, `-` uses old-file numbers), with mechanical noise tagged or skipped
+
+**Large changes.** The full map of a big change can run to thousands of lines. When the change touches more than about 15 files, or you already know it is large, add `--files-only` first: it prints the file list (and perspica's reading order and classified changes) without the diff. Plan from that, then pull the diff for the files you are about to quiz on with `--path <file, folder or glob>`, which can be repeated (`--path src/cart --path '*.sql'`). Both options combine with every target from Step 1. Every block still has to be read from its diff before it is asked: `--files-only` is for planning the order, not for writing answer keys.
 
 Read all of it before planning. If the output says perspica wasn't used, carry on: the plain-diff path works fine, and its noise tags marked with `?` are heuristics to double-check. Mention perspica once at most (`cargo install perspica` gives cleaner blocks), and only if the change is large or noisy.
 
@@ -85,7 +95,7 @@ Tests: 2 blocks in tests/test_cart.py, at the end if you want them
 Type hint, explain, skip or stop at any time. Ready?
 ```
 
-For more than about 12 blocks, offer to split the work into sessions or let the user pick a subset.
+For more than about 12 blocks, offer to split the work into sessions (see "Stopping and resuming") or let the user pick a subset.
 
 ## Step 5: The loop, for each block
 
@@ -96,6 +106,8 @@ Just before showing a block, write the answer key in your own reasoning. It neve
 - 2–5 **must-mention points**: behavior a real understanding includes, such as conditions, limits, order, what's returned, what happens on failure.
 - What the comments, docstrings and names already say. This is the "parrot list".
 - Mistakes the user is likely to make.
+
+**Check a doubtful point before you grade on it.** If you aren't sure of a must-mention point (an off-by-one, operator precedence, what a library call returns on an edge case) and the code can be run, settle it first: run a small snippet or the existing tests. Use a scratch file outside the repository and never change the user's working tree. For an MR, read the code with `git show <ref>:<path>` rather than checking the ref out. If you can't run it, don't grade on that point, or state it as an assumption.
 
 ### Show and ask
 
@@ -165,23 +177,59 @@ Use your own wording, never the comment's. Spend the words on what the comments 
 - `hint`: next hint.
 - `explain`: skip straight to the line-by-line explanation.
 - `skip`: record the block as *skipped* and move on. It still gets explained in the final walkthrough.
-- `stop`: go to Step 6 with what's done so far.
+- `stop`: go to Step 6 with what's done so far. If blocks are left, offer to save progress first (see "Stopping and resuming").
 
 After each block, show one progress line: `Progress 4/9 · pass 2 · with help 1 · explained 1`.
 
 ## Step 6: Wrap up
 
-1. **Scoreboard**: each block with its result. List the *explained* and *skipped* blocks as worth a second look.
+1. **Scoreboard**: each block with its result. List the *explained* and *skipped* blocks as worth a second look, and offer a second round on just those blocks, now or in a later session. In that round the user has already seen the explanation, so ask for more than a restatement of it: what happens for a specific input, or why a particular line is needed.
 2. **Big-picture question** (offer it, don't force it): one question about how the blocks work together, such as "Trace what happens to a cart with one free item and a 20% discount, from `total()` down." Do this only if the change has more than one block that interact.
 3. **Annotated walkthrough**: the whole change, block by block in plan order. For each block give the header, the code with line numbers, and the line-by-line explanation. Where the user passed, quote their explanation as **In your words:** and add only what they missed. Skipped and explained blocks get the full explanation.
 
 Offer to save the walkthrough as a Markdown file. Suggest a place outside the repository (for example `~/block-quiz/<repo>-<target>-<date>.md`) so it doesn't end up in a commit, and ask before writing it.
 
+## Stopping and resuming
+
+A quiz can run over several sessions. When the user splits the plan into sessions, types `stop` with blocks left, or wants a second round later, offer to save a progress file beside the walkthrough (`~/block-quiz/<repo>-<target>.progress.json`). Ask before writing it the first time, then update it after every block without asking again.
+
+```json
+{
+  "repo": "/home/me/src/shop",
+  "target": "MR 42",
+  "script_option": "--range origin/main...refs/quiz/mr-42",
+  "base_sha": "9f2c1ab…",
+  "head_sha": "4d7e0c3…",
+  "saved": "2026-11-13",
+  "blocks": [
+    {"n": 1, "file": "cart.py", "lines": "4-13", "symbol": "total()", "kind": "modified", "result": "pass"},
+    {"n": 2, "file": "cart.py", "lines": "16-19", "symbol": "apply_discount()", "kind": "new", "result": "explained"},
+    {"n": 3, "file": "cart.py", "lines": "22-30", "symbol": "checkout()", "kind": "new", "result": null}
+  ],
+  "skipped": ["package-lock.json (generated)"],
+  "answers": {"1": "Adds up price times quantity and skips free items."}
+}
+```
+
+- `base_sha` and `head_sha` are the full commit hashes both ends of the change resolve to (`git rev-parse`). For uncommitted or staged work there is no head commit: store `null` and the output of `git diff HEAD | git hash-object --stdin` (add `--cached` for staged) as `diff_hash` instead. For a patch file, store the hash of the file.
+- `result` is `pass`, `pass with help`, `explained`, `skipped`, or `null` for a block that hasn't been asked.
+- `answers` keeps the user's passing explanations, so the final walkthrough can still quote them as **In your words:**.
+- The file holds no answer keys and no descriptions of unanswered blocks. The no-spoiler rule covers it too.
+
+**Resuming** ("continue my quiz", "pick up where we left off"): look in `~/block-quiz/` for a progress file for this repository. With several, ask which one. Then:
+
+1. For an MR or PR, fetch again as in Step 1. Then resolve both ends again and compare them with the saved hashes.
+2. **Nothing moved**: rebuild the change map with the saved `script_option`, show the plan with the results so far, and carry on at the first block without a result.
+3. **The change moved** (new commits, a rebase, a force-push): say so before anything else. Rebuild the map and cut it into blocks again. A block whose code is identical to before keeps its result. Changed and new blocks are asked again, and blocks that no longer exist are dropped. Show the new plan and what changed in it, then carry on.
+
+When every block has a result and the walkthrough is saved, offer to delete the progress file.
+
 ## Edge cases
 
 - **No changes found**: say so, and offer the other targets from Step 1.
 - **Only mechanical changes**: say there's nothing to quiz on, and list what changed and why it counts as mechanical.
-- **Huge change** (>40 blocks): suggest one directory, one feature or the reading-order top 10, rather than everything.
+- **Huge change** (>40 blocks): suggest one directory, one feature or the reading-order top 10, rather than everything. Use `--files-only` to plan and `--path` to load only the part the user picks.
+- **The script exits with "no diff found"**: the patch file isn't a unified diff (a web page saved instead of the `.diff`, or a truncated paste). Say so and ask for the diff again. Don't quiz on a guess.
 - **Binary files and images**: list them as skipped.
 - **Languages you can't run or verify**: grade only what the code visibly does, and name any assumption you make.
 - **The user disputes a grade**: re-read the code. If they're right, say so plainly and change the result. If not, point to the exact line.
