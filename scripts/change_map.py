@@ -51,7 +51,48 @@ TEST_PATTERNS = [
     r"\.(test|spec)\.[cm]?[jt]sx?$", r"Tests?\.(java|kt|cs|scala|swift)$", r"_spec\.rb$",
 ]
 DOC_PATTERNS = [r"\.(md|mdx|rst|adoc|txt)$", r"(^|/)docs?/", r"(^|/)(CHANGELOG|LICENSE|README)"]
-COMMENT_PREFIXES = ("#", "//", "/*", "*", "*/", "--", ";", "<!--", '"""', "'''")
+
+# Comment markers depend on the language: "#" opens a comment in Python but a
+# preprocessor line in C and an attribute in Rust. A file whose language is not
+# listed here gets no markers, so none of its lines are ever called comment-only.
+# The bare "*" of a block-comment continuation is left out on purpose: it is
+# also a dereference ("*p = 1;") or an unpacking ("**kwargs").
+HASH = ("#",)
+SLASH = ("//", "/*", "*/")
+COMMENT_PREFIXES_BY_EXT = {}
+for _exts, _prefixes in (
+    ("py pyi", HASH + ('"""', "'''")),
+    ("rb sh bash zsh fish yaml yml toml pl pm r tf nix ex exs ps1 mk cmake", HASH),
+    ("cfg conf properties gitignore dockerignore", HASH),
+    ("c h cc cpp cxx hpp hh java js jsx mjs cjs ts tsx go rs swift kt kts", SLASH),
+    ("scala cs dart m mm groovy proto scss less", SLASH),
+    ("php", SLASH + HASH),
+    ("css", ("/*", "*/")),
+    ("sql lua hs elm adb ads", ("--",)),
+    ("el lisp clj cljs scm asm s", (";",)),
+    ("ini", (";", "#")),
+    ("html htm xml svg vue md", ("<!--",)),
+):
+    for _ext in _exts.split():
+        COMMENT_PREFIXES_BY_EXT[_ext] = _prefixes
+COMMENT_PREFIXES_BY_NAME = {
+    "Dockerfile": HASH, "Makefile": HASH, "GNUmakefile": HASH, "CMakeLists.txt": HASH,
+    "Gemfile": HASH, "Rakefile": HASH,
+}
+
+
+def comment_prefixes(path):
+    """Line-comment markers for the language of `path`, or () when unknown."""
+    name = os.path.basename(path)
+    if name in COMMENT_PREFIXES_BY_NAME:
+        return COMMENT_PREFIXES_BY_NAME[name]
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    return COMMENT_PREFIXES_BY_EXT.get(ext, ())
+
+
+def is_comment(text, prefixes):
+    # "#!" is a shebang: it picks the interpreter, so changing it changes behavior.
+    return bool(prefixes) and text.startswith(prefixes) and not text.startswith("#!")
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +425,7 @@ def parse_unified(raw):
     return files
 
 
-def run_noise(run_lines):
+def run_noise(run_lines, path=""):
     """Noise label for one run of consecutive changed lines, or None."""
     removed = [t for s, _, t in run_lines if s == "-"]
     added = [t for s, _, t in run_lines if s == "+"]
@@ -392,17 +433,18 @@ def run_noise(run_lines):
     if squash(removed) == squash(added):
         return "formatting"
     changed = [t.strip() for t in removed + added if t.strip()]
-    if changed and all(t.startswith(COMMENT_PREFIXES) for t in changed):
+    prefixes = comment_prefixes(path)
+    if changed and all(is_comment(t, prefixes) for t in changed):
         return "comment-only"
     return None
 
 
-def tag_noise(lines):
+def tag_noise(lines, path=""):
     """Return [(sign, n, text, noise_or_None)] and whether every changed line is noise."""
     out, run_buf = [], []
 
     def flush():
-        noise = run_noise(run_buf) if run_buf else None
+        noise = run_noise(run_buf, path) if run_buf else None
         out.extend((s, n, t, noise) for s, n, t in run_buf)
         run_buf.clear()
 
@@ -449,7 +491,7 @@ def print_git(label, raw, untracked):
             plus = [n for s, n, _ in h["lines"] if s in "+ "]
             minus = [n for s, n, _ in h["lines"] if s == "-"]
             head = "new {}-{}".format(min(plus), max(plus)) if plus else "old {}-{}".format(min(minus), max(minus))
-            tagged, all_noise = tag_noise(h["lines"])
+            tagged, all_noise = tag_noise(h["lines"], path)
             if all_noise:
                 labels = sorted({x[3] for x in tagged if x[3]})
                 print("\n(skipped hunk {}: looks {})".format(head, " / ".join(labels)))
