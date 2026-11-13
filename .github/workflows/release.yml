@@ -16,6 +16,15 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v10.3.3
       - run: uv run pytest
+      - name: Check the tag against the plugin version
+        run: |
+          # Plugin installs update when plugin.json's version changes, so a tag
+          # that disagrees with it would release something nobody is offered.
+          version="$(jq -r .version .claude-plugin/plugin.json)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match plugin.json version $version"
+            exit 1
+          fi
       - name: Build block-quiz.skill
         run: |
           # A .skill file is a zip with the skill folder at its top level.

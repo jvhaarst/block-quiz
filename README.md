@@ -40,7 +40,20 @@ Type hint, explain, skip or stop at any time. Ready?
 
 ## Install
 
-**Claude Code, for all your projects:**
+**Claude Code, as a plugin** (recommended; this is the install that can update itself):
+
+```bash
+claude plugin marketplace add jvhaarst/block-quiz
+```
+
+```bash
+claude plugin install block-quiz@block-quiz
+```
+
+Installed this way the skill is called `/block-quiz:block-quiz`. Asking in plain
+words works the same as with any other install.
+
+**Claude Code, as a plain skill folder, for all your projects:**
 
 ```bash
 git clone https://github.com/jvhaarst/block-quiz.git ~/.claude/skills/block-quiz
@@ -59,11 +72,33 @@ If Claude Code was already running, restart it so it picks up the skill.
 it under Settings → Capabilities → Skills. Code execution has to be on. There is
 no local repository there, so paste a diff or upload a `.diff` or `.patch` file.
 
-**Update** a Claude Code install:
+### Updates
+
+**Plugin install.** Claude Code offers a new version when the `version` in
+`.claude-plugin/plugin.json` changes, which happens with every release. Update by
+hand with:
+
+```bash
+claude plugin update block-quiz@block-quiz
+```
+
+To have Claude Code do this by itself at startup, turn on auto-update for the
+`block-quiz` marketplace: run `/plugin` in Claude Code and open the Marketplaces
+tab. It is off by default for marketplaces that aren't Anthropic's own.
+
+**Skill folder install.** Nothing updates it for you. Pull when you want the
+latest:
 
 ```bash
 git -C ~/.claude/skills/block-quiz pull
 ```
+
+**Submodule install.** Update the submodule in the project that uses it, or let
+[Renovate](https://docs.renovatebot.com/modules/manager/git-submodules/) open a
+pull request for each new commit by enabling its `git-submodules` manager.
+
+**claude.ai.** Download the new `block-quiz.skill` from the latest release and
+upload it again.
 
 ## Usage
 
@@ -158,8 +193,11 @@ uv run pytest
 uv run ruff check . && uv run ruff format --check .
 ```
 
-Pushing a `v*` tag runs the release workflow, which builds `block-quiz.skill` and
-attaches it to that tag's release.
+To release, set the same new version in `pyproject.toml` and
+`.claude-plugin/plugin.json`, run `uv lock`, and push a `v<version>` tag. The
+release workflow refuses a tag that doesn't match, then builds `block-quiz.skill`
+and attaches it to that tag's release. Plugin installs pick the new version up
+from `plugin.json` on `main`.
 
 ## License
 
