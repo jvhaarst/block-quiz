@@ -323,10 +323,38 @@ def git_target(ns):
     return label, git(*DIFF_FLAGS, mb), untracked
 
 
+HUNK_RE = re.compile(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)")
+
+
 def parse_unified(raw):
     files, cur, hunk = [], None, None
-    old_n = new_n = 0
+    old_n = new_n = old_left = new_left = 0
     for line in raw.split("\n"):
+        if hunk is not None and (old_left > 0 or new_left > 0):
+            # Inside a hunk the @@ counts say how many lines belong to it, so a
+            # removed "-- note" (printed as "--- note") is content, not a file
+            # header, and a format-patch "-- " signature after the hunk is not.
+            sign = line[:1]
+            if sign == "+":
+                hunk["lines"].append(("+", new_n, line[1:]))
+                new_n += 1
+                new_left -= 1
+                continue
+            if sign == "-":
+                hunk["lines"].append(("-", old_n, line[1:]))
+                old_n += 1
+                old_left -= 1
+                continue
+            if sign == " ":
+                hunk["lines"].append((" ", new_n, line[1:]))
+                old_n += 1
+                new_n += 1
+                old_left -= 1
+                new_left -= 1
+                continue
+            if sign == "\\" or line == "":
+                continue
+            hunk = None  # truncated hunk: this line is a header, handled below
         if line.startswith("diff --git "):
             m = re.match(r"diff --git a/(.*) b/(.*)$", line)
             cur = {"old": m.group(1) if m else "?", "new": m.group(2) if m else "?", "status": "M",
@@ -344,24 +372,13 @@ def parse_unified(raw):
         elif line.startswith("Binary files "):
             cur["binary"] = True
         elif line.startswith("@@"):
-            m = re.match(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)", line)
+            m = HUNK_RE.match(line)
             if m:
-                old_n, new_n = int(m.group(1)), int(m.group(2))
-                hunk = {"header": m.group(3).strip(), "lines": []}
+                old_n, new_n = int(m.group(1)), int(m.group(3))
+                old_left = int(m.group(2)) if m.group(2) is not None else 1
+                new_left = int(m.group(4)) if m.group(4) is not None else 1
+                hunk = {"header": m.group(5).strip(), "lines": []}
                 cur["hunks"].append(hunk)
-        elif hunk is not None:
-            if line.startswith("+") and not line.startswith("+++ "):
-                hunk["lines"].append(("+", new_n, line[1:]))
-                new_n += 1
-            elif line.startswith("-") and not line.startswith("--- "):
-                hunk["lines"].append(("-", old_n, line[1:]))
-                old_n += 1
-            elif line.startswith(" "):
-                hunk["lines"].append((" ", new_n, line[1:]))
-                old_n += 1
-                new_n += 1
-            elif line.startswith("\\"):
-                continue
     return files
 
 

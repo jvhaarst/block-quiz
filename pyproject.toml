@@ -1,0 +1,16 @@
+[project]
+name = "block-quiz"
+version = "1.0.0"
+description = "A Claude skill that quizzes you on a code change, one block at a time"
+requires-python = ">=3.8"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts"]
