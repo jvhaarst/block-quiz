@@ -1,13 +1,28 @@
 # block-quiz
 
-A skill for Claude that quizzes you on a code change, one logical block at a time.
+[![ci](https://github.com/jvhaarst/block-quiz/actions/workflows/ci.yml/badge.svg)](https://github.com/jvhaarst/block-quiz/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/jvhaarst/block-quiz)](https://github.com/jvhaarst/block-quiz/releases/latest)
+[![license: MIT](https://img.shields.io/github/license/jvhaarst/block-quiz)](LICENSE)
+
+**Do you really understand the pull request you are about to merge?** block-quiz
+is a Claude Code plugin and Agent Skill that quizzes you on a code change, one
+logical block at a time. It works on a pull request, a merge request, a commit, a
+branch, or a diff file.
+
 For each block you explain in your own words what it does. Claude grades your
 answer against what the code actually does, not what the comments claim. When you
 miss, you get hints first, then a line-by-line explanation. At the end you get an
 annotated walkthrough of the whole change.
 
-Use it before you merge something you didn't write, when you review a merge
-request, or to check that you really understand code an AI wrote for you.
+Use it:
+
+- before you merge code you didn't write
+- when you review a pull request or merge request
+- to check that you understand AI-generated code, instead of just accepting it
+- to get to know an unfamiliar part of a codebase through its recent changes
+
+It uses only local git, so it needs no host CLI or API token, and it works with
+GitHub, GitLab, Gitea and Forgejo.
 
 ## How a session goes
 
@@ -36,7 +51,7 @@ Type hint, explain, skip or stop at any time. Ready?
 - [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), or another agent that supports Agent Skills (`SKILL.md`)
 - `git`
 - Python 3.8 or newer. The helper script uses only the standard library.
-- Optional: [perspica](https://github.com/sshah03/perspica) (`cargo install perspica`). With it, blocks follow a reading order from entry points down, and renames, moves and formatting-only edits are recognised reliably. Without it, the skill works from plain `git diff`.
+- Optional: [perspica](https://github.com/sshah03/perspica) (`cargo install perspica` or `brew install sshah03/perspica/perspica`). With it, blocks follow a reading order from entry points down, and renames, moves and formatting-only edits are recognised reliably. Without it, the skill works from plain `git diff`.
 
 ## Install
 
@@ -179,6 +194,47 @@ python3 ~/.claude/skills/block-quiz/scripts/change_map.py --path src/cart --path
 
 `--patch` reads `git diff` output, a `.diff` or `.patch` download, and plain
 `diff -u` output. A file with no diff in it is an error, not an empty map.
+
+## block-quiz and perspica
+
+[perspica](https://github.com/sshah03/perspica) is a separate project by another
+author. block-quiz is not part of it or affiliated with it. The two overlap,
+because both help you understand a change before you merge it and both can quiz
+you. They do it differently, and block-quiz can use perspica as an optional helper.
+
+**How block-quiz uses perspica.** When perspica is installed, the helper script
+runs `perspica --json` and builds the change map from its output instead of from
+plain `git diff`. It takes three things from it:
+
+- which lines are mechanical noise (formatting, comment-only edits, renames, moves,
+  generated files), so they are skipped reliably instead of by heuristics
+- the reading order, from entry points down to what they call, which becomes the
+  order of the quiz
+- the list of classified changes (logic, signatures, dependencies, unused code)
+
+Only perspica's own code analysis is used, which runs locally and needs no API
+key. block-quiz does not run perspica's LLM analysis, its viewer or its Learn tab.
+Without perspica everything still works; the blocks are just cut from a plain diff.
+The script was checked against perspica 0.5.1 and falls back to plain git when
+perspica's output doesn't have the shape it expects.
+
+**How they differ.**
+
+| | block-quiz | perspica |
+|---|---|---|
+| What it is | A skill: instructions for Claude, plus one small Python script | A program with a terminal and browser viewer |
+| Main job | Test whether you can explain the code | Show what changed, and what a plain diff hides |
+| What the quiz covers | Every block of changed code, one at a time | The one to three concepts behind the change (Learn tab, needs an LLM) |
+| How you answer | A free-text explanation in a conversation, graded against the code, with hints and a line-by-line explanation after a miss | A short quiz of one to three questions per concept |
+| Finds problems in the change | No | Yes: references to removed names, callers not updated, code left unused |
+| Languages | Any, since it reads a diff | A fixed list for its analysis; other files as plain line diffs |
+| Hosts | Any git host, or a diff file | Local git, and GitHub pull requests through `gh` |
+| Can block a merge | No | Yes, optionally |
+
+**Which one to use.** Use perspica to review a change: to see what it does, what
+it might break and what to check. Use block-quiz when you want to find out whether
+you understand the code itself, line by line, in your own words. They work well
+together: install perspica and block-quiz quizzes you in perspica's reading order.
 
 ## Development
 
