@@ -19,10 +19,15 @@ Usage (run inside the repository):
   change_map.py --no-perspica        force the plain git path
   change_map.py --perspica-json F    read saved `perspica --json` output, don't run it
 
+For a large change, plan first and read the diff in parts (works with every target):
+  change_map.py --files-only         the file list without the diff
+  change_map.py --path src/cart.py   only this file, folder or glob; may be repeated
+
 Standard library only. Python 3.8+.
 """
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -240,10 +245,60 @@ def perspica_args(ns):
     return args
 
 
+def perspica_problem(data):
+    """Say what is wrong with the shape of perspica's JSON, or None when it fits.
+
+    perspica's output has no schema version, so this checks the parts the map is
+    built from (its `MultiFileResult`: files, results, source, cross_file). Without
+    the check a renamed field would not fail: it would print a map full of "?".
+    """
+    if not isinstance(data, dict):
+        return "top level is not an object"
+    for key, kind, kind_name in (
+        ("files", list, "a list"),
+        ("results", list, "a list"),
+        ("source", dict, "an object"),
+        ("cross_file", dict, "an object"),
+    ):
+        if key not in data:
+            return f"`{key}` is missing"
+        if not isinstance(data[key], kind):
+            return f"`{key}` is not {kind_name}"
+    files, results = data["files"], data["results"]
+    if len(files) != len(results):
+        return f"{len(files)} files but {len(results)} results"
+    for i, f in enumerate(files):
+        if not isinstance(f, dict):
+            return f"files[{i}] is not an object"
+        for key in ("new_path", "old_path"):
+            if not isinstance(f.get(key), str):
+                return f"files[{i}] has no `{key}`"
+    for i, r in enumerate(results):
+        if not isinstance(r, dict):
+            return f"results[{i}] is not an object"
+        for key, kind, kind_name in (
+            ("hunks", list, "a list"),
+            ("manifest", dict, "an object"),
+        ):
+            if key not in r:
+                return f"results[{i}] has no `{key}`"
+            if not isinstance(r[key], kind):
+                return f"results[{i}] `{key}` is not {kind_name}"
+    return None
+
+
 def load_perspica(ns):
     if ns.perspica_json:
         with open(ns.perspica_json, encoding="utf-8") as fh:
-            return json.load(fh), f"saved perspica JSON ({ns.perspica_json})"
+            data = json.load(fh)
+        problem = perspica_problem(data)
+        if problem:
+            raise RuntimeError(
+                f"{ns.perspica_json} is not the perspica JSON this script reads "
+                f"({problem}). Save it again with `perspica --json`, or update "
+                "this script if perspica's output changed."
+            )
+        return data, f"saved perspica JSON ({ns.perspica_json})"
     if ns.no_perspica or not shutil.which("perspica"):
         return None, None
     rc, out, err = run(perspica_args(ns), check=False)
@@ -253,17 +308,81 @@ def load_perspica(ns):
         )
         return None, None
     try:
-        return json.loads(out), "perspica"
+        data = json.loads(out)
     except json.JSONDecodeError:
         sys.stderr.write("perspica output was not JSON, using plain git instead\n")
         return None, None
+    problem = perspica_problem(data)
+    if problem:
+        sys.stderr.write(
+            f"perspica JSON has an unexpected shape ({problem}), using plain git "
+            "instead. This script may be out of date for the installed perspica.\n"
+        )
+        return None, None
+    return data, "perspica"
 
 
-def print_perspica(data, analyzer):
+def path_selected(path, patterns):
+    """True when `path` is one of `patterns`, inside one, or matches one as a glob."""
+    if not patterns:
+        return True
+    for pattern in patterns:
+        pattern = pattern.rstrip("/")
+        if (
+            path == pattern
+            or path.startswith(pattern + "/")
+            or fnmatch.fnmatchcase(path, pattern)
+        ):
+            return True
+    return False
+
+
+def showing_line(shown, total, paths):
+    return "- Showing: {} of {} files (--path {})".format(shown, total, " ".join(paths))
+
+
+FILES_ONLY_NOTE = (
+    "(diff left out by --files-only; add --path <file or folder> "
+    "to get the diff for one part of the change)"
+)
+
+
+def print_perspica(data, analyzer, files_only=False, paths=()):
     files = data.get("files") or []
     results = data.get("results") or []
     source = data.get("source") or {}
     cross = data.get("cross_file") or {}
+    total = len(files)
+    if paths:
+        keep = [
+            i
+            for i, f in enumerate(files)
+            if path_selected(f.get("new_path") or "", paths)
+            or path_selected(f.get("old_path") or "", paths)
+        ]
+        if not keep:
+            raise RuntimeError(
+                "no changed file matches --path {}".format(" ".join(paths))
+            )
+        files = [files[i] for i in keep]
+        results = [results[i] for i in keep if i < len(results)]
+        cross = dict(cross)
+        cross["reading_order"] = [
+            s
+            for s in cross.get("reading_order") or []
+            if path_selected(s.get("file") or "", paths)
+        ]
+        cross["moves"] = [
+            e
+            for e in cross.get("moves") or []
+            if path_selected(e.get("from_file") or "", paths)
+            or path_selected(e.get("to_file") or "", paths)
+        ]
+        cross["broken_references"] = [
+            e
+            for e in cross.get("broken_references") or []
+            if path_selected(e.get("reference_file") or "", paths)
+        ]
 
     print("# Change map")
     print("- Target: {}".format(source.get("label") or "?"))
@@ -277,6 +396,8 @@ def print_perspica(data, analyzer):
             f"- WARNING: {len(files)} files but {len(results)} results; "
             "file pairing may be off"
         )
+    if paths:
+        print(showing_line(len(files), total, paths))
     print()
 
     print("## Files")
@@ -443,6 +564,9 @@ def print_perspica(data, analyzer):
         )
     print()
 
+    if files_only:
+        print(FILES_ONLY_NOTE)
+        return
     print("## Diff (line numbers: new file for + and context, old file for -)")
     for i, f in enumerate(files):
         r = results[i] if i < len(results) else {}
@@ -690,7 +814,12 @@ def run_noise(run_lines, path=""):
             if not x.strip():
                 continue
             indent = x[: len(x) - len(x.lstrip())] if keep_indent else ""
-            out.append(indent + re.sub(r"\s+", "", x))
+            body = x.strip()
+            # Whitespace inside a string literal is data ("a b" is not "ab"). On
+            # a line with a quote, runs of whitespace are only shortened to one
+            # space, so adding or removing a space still counts as a change.
+            quoted = any(q in body for q in "\"'`")
+            out.append(indent + re.sub(r"\s+", " " if quoted else "", body))
         return out
 
     if squash(removed) == squash(added):
@@ -722,7 +851,7 @@ def tag_noise(lines, path=""):
     return out, bool(changed) and all(x[3] for x in changed)
 
 
-def print_git(label, raw, untracked):
+def print_git(label, raw, untracked, files_only=False, paths=()):
     files = parse_unified(raw)
     if not files and not untracked:
         # Printing an empty map here would look like "nothing changed".
@@ -730,12 +859,26 @@ def print_git(label, raw, untracked):
             f"no diff found in {label}: expected unified diff text (`git diff` or "
             "`diff -u` output) with ---/+++ file headers and @@ hunks"
         )
+    total = len(files) + len(untracked)
+    if paths:
+        files = [
+            f
+            for f in files
+            if path_selected(f["new"], paths) or path_selected(f["old"], paths)
+        ]
+        untracked = [u for u in untracked if path_selected(u, paths)]
+        if not files and not untracked:
+            raise RuntimeError(
+                "no changed file matches --path {}".format(" ".join(paths))
+            )
     print("# Change map")
     print(f"- Target: {label}")
     print(
         "- Analyzer: plain unified diff (perspica not used). "
         "Noise tags marked ? are heuristics."
     )
+    if paths:
+        print(showing_line(len(files) + len(untracked), total, paths))
     print()
     print("## Files")
     for f in files:
@@ -757,6 +900,9 @@ def print_git(label, raw, untracked):
     for u in untracked:
         print(f"- {u} [untracked · {role_for(u)}]")
     print()
+    if files_only:
+        print(FILES_ONLY_NOTE)
+        return
     print("## Diff (line numbers: new file for + and context, old file for -)")
     for f in files:
         path = f["new"] if f["status"] != "D" else f["old"]
@@ -837,13 +983,26 @@ def main():
     p.add_argument(
         "--perspica-json", help="read saved perspica JSON instead of running perspica"
     )
+    p.add_argument(
+        "--files-only",
+        action="store_true",
+        help="print the file list (and perspica's structure) without the diff",
+    )
+    p.add_argument(
+        "--path",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="only this file, folder or glob (such as '*.py'); may be repeated",
+    )
     ns = p.parse_args()
+    view = {"files_only": ns.files_only, "paths": ns.path}
 
     if ns.patch:
         with open(ns.patch, encoding="utf-8", errors="replace") as fh:
             raw = fh.read()
         try:
-            print_git("patch file " + ns.patch, raw, [])
+            print_git("patch file " + ns.patch, raw, [], **view)
         except RuntimeError as e:
             sys.exit(str(e))
         return
@@ -856,13 +1015,13 @@ def main():
     try:
         data, analyzer = load_perspica(ns)
         if data is not None:
-            print_perspica(data, analyzer)
+            print_perspica(data, analyzer, **view)
             return
         label, raw, untracked = git_target(ns)
         if not raw.strip() and not untracked:
             print(f"# Change map\n- Target: {label}\n- No changes found.")
             return
-        print_git(label, raw, untracked)
+        print_git(label, raw, untracked, **view)
     except RuntimeError as e:
         sys.exit(str(e))
 

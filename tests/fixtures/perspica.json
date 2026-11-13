@@ -1,0 +1,271 @@
+{
+  "version": "0.9",
+  "source": {
+    "label": "feature vs main",
+    "detail": "3 commits",
+    "pr_title": "Cart"
+  },
+  "files": [
+    {
+      "old_path": "cart.py",
+      "new_path": "cart.py",
+      "status": "modified",
+      "language": "python"
+    },
+    {
+      "old_path": "a.py",
+      "new_path": "b.py",
+      "status": "renamed",
+      "language": "python"
+    },
+    {
+      "old_path": "x.png",
+      "new_path": "x.png",
+      "status": "modified",
+      "binary": true,
+      "language": ""
+    },
+    {
+      "old_path": "uv.lock",
+      "new_path": "uv.lock",
+      "status": "modified",
+      "language": ""
+    }
+  ],
+  "results": [
+    {
+      "review": {
+        "role": "source",
+        "changed_lines": 4,
+        "mechanical_lines": 1
+      },
+      "manifest": {
+        "test_entries": [
+          1
+        ],
+        "logic_changes": [
+          {
+            "id": 1,
+            "kind": "function",
+            "name": "total",
+            "location": {
+              "file": "cart.py",
+              "line_start": 4,
+              "line_end": 13
+            },
+            "description": "body changed"
+          }
+        ],
+        "signature_changes": [
+          {
+            "id": 2,
+            "name": "total",
+            "location": {
+              "line_start": 4,
+              "line_end": 4,
+              "side": "old"
+            },
+            "description": "added arg"
+          }
+        ],
+        "extracted_functions": [
+          {
+            "id": 3,
+            "original_name": "total",
+            "extracted_names": [
+              "a",
+              "b"
+            ]
+          }
+        ],
+        "renames": [
+          {
+            "id": 4,
+            "kind": "function",
+            "old_name": "calc",
+            "new_name": "total"
+          }
+        ],
+        "moved_code": [
+          {
+            "id": 5,
+            "name": "helper",
+            "from_location": {
+              "line_start": 1,
+              "line_end": 2
+            },
+            "to_location": {
+              "line_start": 9,
+              "line_end": 10
+            }
+          }
+        ],
+        "dependency_changes": [
+          {
+            "id": 6,
+            "change_type": "added",
+            "name": "math",
+            "symbols_added": [
+              "floor"
+            ],
+            "symbols_removed": [
+              "ceil"
+            ]
+          }
+        ],
+        "dead_code": [
+          {
+            "id": 7,
+            "name": "old",
+            "location": {
+              "line_start": 20,
+              "line_end": 22
+            },
+            "reason": "no callers"
+          }
+        ]
+      },
+      "hunks": [
+        {
+          "old_range": {
+            "start": 1,
+            "end": 5
+          },
+          "new_range": {
+            "start": 1,
+            "end": 6
+          },
+          "manifest_refs": [
+            1,
+            2
+          ],
+          "test": true,
+          "changes": [
+            {
+              "kind": "added",
+              "new_span": {
+                "start_line": 2
+              },
+              "content_new": "x = 1"
+            },
+            {
+              "kind": "removed",
+              "old_span": {
+                "start_line": 3
+              },
+              "content_old": "y = 1",
+              "noise": "formatting"
+            },
+            {
+              "kind": "modified",
+              "old_span": {
+                "start_line": 4
+              },
+              "new_span": {
+                "start_line": 4
+              },
+              "content_old": "a",
+              "content_new": "b"
+            },
+            {
+              "kind": "context",
+              "new_span": {
+                "start_line": 5
+              },
+              "content_new": "z"
+            }
+          ]
+        },
+        {
+          "old_range": {
+            "start": 9,
+            "end": 9
+          },
+          "new_range": {
+            "start": 9,
+            "end": 9
+          },
+          "noise": "comment"
+        }
+      ]
+    },
+    {
+      "review": {
+        "role": "source",
+        "parsed": false
+      },
+      "hunks": [],
+      "manifest": {}
+    },
+    {
+      "review": {},
+      "hunks": [],
+      "manifest": {}
+    },
+    {
+      "review": {
+        "generated": true
+      },
+      "hunks": [],
+      "manifest": {}
+    }
+  ],
+  "cross_file": {
+    "reading_order": [
+      {
+        "depth": 0,
+        "kind": "function",
+        "name": "main",
+        "file": "cart.py",
+        "calls": [
+          "total"
+        ]
+      },
+      {
+        "depth": 1,
+        "kind": "function",
+        "name": "total",
+        "file": "cart.py"
+      },
+      {
+        "depth": 1,
+        "kind": "function",
+        "name": "total",
+        "file": "cart.py",
+        "repeat": true
+      }
+    ],
+    "moves": [
+      {
+        "id": 8,
+        "name": "f",
+        "from_file": "a.py",
+        "to_file": "b.py",
+        "modified": true
+      }
+    ],
+    "signature_impacts": [
+      {
+        "id": 9,
+        "name": "total",
+        "description": "arity",
+        "call_sites": [
+          1,
+          2
+        ]
+      }
+    ],
+    "broken_references": [
+      {
+        "id": 10,
+        "symbol_name": "calc",
+        "reference_location": {
+          "line_start": 3,
+          "line_end": 3
+        },
+        "reference_file": "z.py",
+        "reason": "renamed"
+      }
+    ]
+  }
+}
