@@ -90,6 +90,18 @@ def comment_prefixes(path):
     return COMMENT_PREFIXES_BY_EXT.get(ext, ())
 
 
+INDENT_EXTS = {"py", "pyi", "pyx", "yaml", "yml", "mk", "haml", "pug", "slim", "sass",
+               "styl", "coffee", "nim", "hs", "fs", "fsx"}
+INDENT_NAMES = {"Makefile", "GNUmakefile", "makefile"}
+
+
+def indentation_matters(path):
+    """True when leading whitespace is syntax in this file, so never just formatting."""
+    name = os.path.basename(path)
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    return name in INDENT_NAMES or ext in INDENT_EXTS
+
+
 def is_comment(text, prefixes):
     # "#!" is a shebang: it picks the interpreter, so changing it changes behavior.
     return bool(prefixes) and text.startswith(prefixes) and not text.startswith("#!")
@@ -429,7 +441,17 @@ def run_noise(run_lines, path=""):
     """Noise label for one run of consecutive changed lines, or None."""
     removed = [t for s, _, t in run_lines if s == "-"]
     added = [t for s, _, t in run_lines if s == "+"]
-    squash = lambda xs: [re.sub(r"\s+", "", x) for x in xs if x.strip()]
+    keep_indent = indentation_matters(path)
+
+    def squash(texts):
+        out = []
+        for x in texts:
+            if not x.strip():
+                continue
+            indent = x[:len(x) - len(x.lstrip())] if keep_indent else ""
+            out.append(indent + re.sub(r"\s+", "", x))
+        return out
+
     if squash(removed) == squash(added):
         return "formatting"
     changed = [t.strip() for t in removed + added if t.strip()]
