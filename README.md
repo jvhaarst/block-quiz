@@ -89,9 +89,11 @@ Start Claude Code inside the repository you want to be quizzed on. Then type
 | a pasted diff, or a `.diff` / `.patch` file | that patch; no repository needed |
 
 Merge and pull requests are fetched with plain `git fetch` into a local ref
-(`quiz/mr-<iid>` or `quiz/pr-<n>`). No host CLI or API token is needed, and your
-working tree is left alone. This works for GitLab, GitHub, Gitea and Forgejo. For
-other hosts, check out the branch yourself or download the change as a `.diff`.
+(`refs/quiz/mr-<iid>` or `refs/quiz/pr-<n>`). That ref is not a branch, so it stays
+out of `git branch`, and fetching again after a force-push just updates it. No host
+CLI or API token is needed, and your working tree is left alone. This works for
+GitLab, GitHub, Gitea and Forgejo. For other hosts, such as Bitbucket, check out
+the branch yourself or download the change as a `.diff`.
 
 ### Commands during the quiz
 
@@ -108,6 +110,13 @@ nothing was hidden. Tests come at the end, and only if you want them. For more
 than about 12 blocks, Claude offers to split the work over several sessions or let
 you pick a subset.
 
+A quiz can be stopped and picked up later. Claude offers to save a small progress
+file next to the walkthrough (`~/block-quiz/<repo>-<target>.progress.json`). Say
+"continue my quiz" in a later session: Claude checks whether the change moved in
+the meantime, keeps the results for blocks that are unchanged, and asks only the
+rest. After the scoreboard you can also redo just the blocks you skipped or needed
+explained.
+
 ## The helper script
 
 `scripts/change_map.py` builds the line-numbered change map the skill works from.
@@ -121,6 +130,19 @@ python3 ~/.claude/skills/block-quiz/scripts/change_map.py --patch change.diff
 
 Other options are `--base`, `--staged`, `--uncommitted`, `--commit`,
 `--no-perspica` and `--perspica-json`. Run it with `--help` for the details.
+
+## Development
+
+The script has regression tests in `tests/`, and CI runs them with ruff on every
+pull request. Run the same checks locally with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv run pytest
+```
+
+```bash
+uv run ruff check . && uv run ruff format --check .
+```
 
 ## License
 
