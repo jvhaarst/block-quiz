@@ -379,10 +379,27 @@ def git_target(ns):
 HUNK_RE = re.compile(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)")
 
 
+def header_path(line, prefix):
+    """Path from a '--- a/x' or '+++ b/x' line; None when it is /dev/null."""
+    path = line[4:].split("\t", 1)[0]  # plain diff puts a tab and a timestamp after it
+    if path == "/dev/null":
+        return None
+    return path[len(prefix):] if path.startswith(prefix) else path
+
+
+def new_file(old, new):
+    return {"old": old, "new": new, "status": "M", "binary": False, "hunks": []}
+
+
 def parse_unified(raw):
     files, cur, hunk = [], None, None
     old_n = new_n = old_left = new_left = 0
-    for line in raw.split("\n"):
+    expect_headers = False  # a `diff --git` line was seen, its ---/+++ pair not yet
+    lines = raw.split("\n")
+    i = -1
+    while i + 1 < len(lines):
+        i += 1
+        line = lines[i]
         if hunk is not None and (old_left > 0 or new_left > 0):
             # Inside a hunk the @@ counts say how many lines belong to it, so a
             # removed "-- note" (printed as "--- note") is content, not a file
@@ -412,10 +429,26 @@ def parse_unified(raw):
             hunk = None  # truncated hunk: this line is a header, handled below
         if line.startswith("diff --git "):
             m = re.match(r"diff --git a/(.*) b/(.*)$", line)
-            cur = {"old": m.group(1) if m else "?", "new": m.group(2) if m else "?", "status": "M",
-                   "binary": False, "hunks": []}
+            cur = new_file(m.group(1) if m else "?", m.group(2) if m else "?")
             files.append(cur)
             hunk = None
+            expect_headers = True
+        elif (line.startswith("--- ") and i + 1 < len(lines)
+              and lines[i + 1].startswith("+++ ")):
+            # The ---/+++ pair names the file. Without a `diff --git` line before
+            # it (plain `diff -u` output) the pair also starts the file.
+            if not expect_headers:
+                cur = new_file("?", "?")
+                files.append(cur)
+            old, new = header_path(line, "a/"), header_path(lines[i + 1], "b/")
+            if old is None:
+                cur["status"] = "A"
+            elif new is None:
+                cur["status"] = "D"
+            cur["old"], cur["new"] = old or new or "?", new or old or "?"
+            hunk = None
+            expect_headers = False
+            i += 1
         elif cur is None:
             continue
         elif line.startswith("new file mode"):
@@ -483,6 +516,11 @@ def tag_noise(lines, path=""):
 
 def print_git(label, raw, untracked):
     files = parse_unified(raw)
+    if not files and not untracked:
+        # Printing an empty map here would look like "nothing changed".
+        raise RuntimeError(
+            "no diff found in {}: expected unified diff text (`git diff` or `diff -u` "
+            "output) with ---/+++ file headers and @@ hunks".format(label))
     print("# Change map")
     print("- Target: {}".format(label))
     print("- Analyzer: plain unified diff (perspica not used). Noise tags marked ? are heuristics.")
@@ -562,7 +600,10 @@ def main():
     if ns.patch:
         with open(ns.patch, encoding="utf-8", errors="replace") as fh:
             raw = fh.read()
-        print_git("patch file " + ns.patch, raw, [])
+        try:
+            print_git("patch file " + ns.patch, raw, [])
+        except RuntimeError as e:
+            sys.exit(str(e))
         return
 
     if not ns.perspica_json:
