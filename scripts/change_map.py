@@ -251,6 +251,7 @@ def perspica_problem(data):
     perspica's output has no schema version, so this checks the parts the map is
     built from (its `MultiFileResult`: files, results, source, cross_file). Without
     the check a renamed field would not fail: it would print a map full of "?".
+    The field names this script reads were compared with perspica 0.5.1.
     """
     if not isinstance(data, dict):
         return "top level is not an object"
@@ -306,6 +307,10 @@ def load_perspica(ns):
         sys.stderr.write(
             f"perspica failed, using plain git instead: {err.strip()[:300]}\n"
         )
+        return None, None
+    if (out.strip() or err.strip()).startswith("No changes found"):
+        # perspica says this in plain text on stderr, even with --json, and prints
+        # no JSON. The plain git path then reports the empty change itself.
         return None, None
     try:
         data = json.loads(out)
@@ -524,6 +529,15 @@ def print_perspica(data, analyzer, files_only=False, paths=()):
                     e.get("name"),
                     fmt_loc(e.get("location"), fpath),
                     e.get("reason", ""),
+                )
+            )
+        for e in m.get("formatting_only") or []:
+            any_entry = True
+            print(
+                "- formatting-only #{} {}: {} (mechanical)".format(
+                    e.get("id"),
+                    fmt_loc(e.get("location"), fpath),
+                    e.get("description", ""),
                 )
             )
     for e in cross.get("moves") or []:

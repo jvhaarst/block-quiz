@@ -123,6 +123,18 @@
             },
             "reason": "no callers"
           }
+        ],
+        "formatting_only": [
+          {
+            "id": 11,
+            "location": {
+              "file": "cart.py",
+              "line_start": 30,
+              "line_end": 34,
+              "side": "new"
+            },
+            "description": "TAX_RATES: formatting/comments only"
+          }
         ]
       },
       "hunks": [

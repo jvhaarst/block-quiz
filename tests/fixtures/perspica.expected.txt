@@ -22,6 +22,7 @@
 - moved #5 `helper` cart.py:1-2 -> cart.py:9-10 (mechanical)
 - dependency #6 added `math` in cart.py +floor -ceil
 - now unused #7 `old` cart.py:20-22: no callers
+- formatting-only #11 cart.py:30-34: TAX_RATES: formatting/comments only (mechanical)
 - moved across files #8 `f` a.py -> b.py (body edited)
 - signature impact #9 `total`: arity (2 call sites)
 - broken reference #10 `calc` at z.py:3: renamed
