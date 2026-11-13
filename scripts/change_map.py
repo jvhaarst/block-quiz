@@ -43,14 +43,16 @@ GENERATED_PATTERNS = [
     r"(^|/)pnpm-lock\.yaml$", r"(^|/)bun\.lockb?$", r"(^|/)Cargo\.lock$", r"(^|/)poetry\.lock$",
     r"(^|/)Pipfile\.lock$", r"(^|/)uv\.lock$", r"(^|/)composer\.lock$", r"(^|/)Gemfile\.lock$",
     r"(^|/)go\.sum$", r"(^|/)packages\.lock\.json$", r"\.min\.(js|css)$", r"\.map$", r"\.snap$",
-    r"(^|/)(dist|build|out|target|vendor|node_modules|third_party)/", r"_pb2(_grpc)?\.py$",
+    # Build output only counts at the top of the repository: deeper down, a folder
+    # called build/ or target/ is as likely to hold hand-written source.
+    r"^(dist|build|out|target)/", r"(^|/)(vendor|node_modules|third_party)/", r"_pb2(_grpc)?\.py$",
     r"\.pb\.go$", r"\.generated\.", r"\.g\.dart$", r"\.designer\.cs$",
 ]
 TEST_PATTERNS = [
     r"(^|/)(test|tests|__tests__|spec|specs|testing)/", r"(^|/)test_[^/]+\.py$", r"_test\.(py|go|rs|rb|exs?)$",
     r"\.(test|spec)\.[cm]?[jt]sx?$", r"Tests?\.(java|kt|cs|scala|swift)$", r"_spec\.rb$",
 ]
-DOC_PATTERNS = [r"\.(md|mdx|rst|adoc|txt)$", r"(^|/)docs?/", r"(^|/)(CHANGELOG|LICENSE|README)"]
+DOC_PATTERNS = [r"\.(md|mdx|rst|adoc)$", r"(^|/)docs?/", r"(^|/)(CHANGELOG|LICENSE|README)"]
 
 # Comment markers depend on the language: "#" opens a comment in Python but a
 # preprocessor line in C and an attribute in Rust. A file whose language is not
@@ -387,6 +389,24 @@ def header_path(line, prefix):
     return path[len(prefix):] if path.startswith(prefix) else path
 
 
+def git_header_paths(line):
+    """(old, new) from a `diff --git a/x b/y` line.
+
+    The line is ambiguous when a path contains " b/", so this is only a first
+    guess: the `rename from/to` and ---/+++ lines that follow overwrite it. It
+    is the final answer only for changes that have neither, such as a mode
+    change or a binary file, and there both paths are the same, so the line
+    splits exactly in the middle.
+    """
+    rest = line[len("diff --git "):]
+    half = (len(rest) - 1) // 2
+    old, new = rest[:half], rest[half + 1:]
+    if rest[half:half + 1] == " " and old.startswith("a/") and new == "b/" + old[2:]:
+        return old[2:], new[2:]
+    m = re.match(r"a/(.*) b/(.*)$", rest)
+    return (m.group(1), m.group(2)) if m else ("?", "?")
+
+
 def new_file(old, new):
     return {"old": old, "new": new, "status": "M", "binary": False, "hunks": []}
 
@@ -428,8 +448,7 @@ def parse_unified(raw):
                 continue
             hunk = None  # truncated hunk: this line is a header, handled below
         if line.startswith("diff --git "):
-            m = re.match(r"diff --git a/(.*) b/(.*)$", line)
-            cur = new_file(m.group(1) if m else "?", m.group(2) if m else "?")
+            cur = new_file(*git_header_paths(line))
             files.append(cur)
             hunk = None
             expect_headers = True
@@ -455,8 +474,11 @@ def parse_unified(raw):
             cur["status"] = "A"
         elif line.startswith("deleted file mode"):
             cur["status"] = "D"
+        elif line.startswith("rename from "):
+            cur["old"] = line[len("rename from "):]
         elif line.startswith("rename to "):
             cur["status"] = "R"
+            cur["new"] = line[len("rename to "):]
         elif line.startswith("Binary files "):
             cur["binary"] = True
         elif line.startswith("@@"):
@@ -571,6 +593,8 @@ def print_git(label, raw, untracked):
             print("\n### {} — untracked, not text, skipped".format(u))
             continue
         lines = text.split("\n")
+        if lines[-1] == "":
+            lines.pop()  # the file's final newline ends the last line, it is not a new one
         if len(lines) > 1500:
             print("\n### {} — untracked, {} lines, too long to inline; read it directly".format(u, len(lines)))
             continue
