@@ -345,14 +345,16 @@ def parse_unified(raw):
                 old_n += 1
                 old_left -= 1
                 continue
-            if sign == " ":
+            if sign == " " or line == "":
+                # An empty line is a blank context line that lost its leading
+                # space, which happens when a diff is pasted or mailed.
                 hunk["lines"].append((" ", new_n, line[1:]))
                 old_n += 1
                 new_n += 1
                 old_left -= 1
                 new_left -= 1
                 continue
-            if sign == "\\" or line == "":
+            if sign == "\\":
                 continue
             hunk = None  # truncated hunk: this line is a header, handled below
         if line.startswith("diff --git "):
