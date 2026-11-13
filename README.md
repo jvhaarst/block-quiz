@@ -131,6 +131,20 @@ python3 ~/.claude/skills/block-quiz/scripts/change_map.py --patch change.diff
 Other options are `--base`, `--staged`, `--uncommitted`, `--commit`,
 `--no-perspica` and `--perspica-json`. Run it with `--help` for the details.
 
+For a large change, `--files-only` prints the file list without the diff, and
+`--path <file, folder or glob>` limits the map to part of the change:
+
+```bash
+python3 ~/.claude/skills/block-quiz/scripts/change_map.py --files-only
+```
+
+```bash
+python3 ~/.claude/skills/block-quiz/scripts/change_map.py --path src/cart --path '*.sql'
+```
+
+`--patch` reads `git diff` output, a `.diff` or `.patch` download, and plain
+`diff -u` output. A file with no diff in it is an error, not an empty map.
+
 ## Development
 
 The script has regression tests in `tests/`, and CI runs them with ruff on every
@@ -143,6 +157,9 @@ uv run pytest
 ```bash
 uv run ruff check . && uv run ruff format --check .
 ```
+
+Pushing a `v*` tag runs the release workflow, which builds `block-quiz.skill` and
+attaches it to that tag's release.
 
 ## License
 

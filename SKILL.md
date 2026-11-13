@@ -62,6 +62,8 @@ It prints a compact map:
 - with perspica, a **reading order** (entry points first, then what they call) and **classified changes** (logic changes, signature changes, renames, moves, dependencies, newly unused code)
 - the diff with line numbers (`+` and context use new-file numbers, `-` uses old-file numbers), with mechanical noise tagged or skipped
 
+**Large changes.** The full map of a big change can run to thousands of lines. When the change touches more than about 15 files, or you already know it is large, add `--files-only` first: it prints the file list (and perspica's reading order and classified changes) without the diff. Plan from that, then pull the diff for the files you are about to quiz on with `--path <file, folder or glob>`, which can be repeated (`--path src/cart --path '*.sql'`). Both options combine with every target from Step 1. Every block still has to be read from its diff before it is asked: `--files-only` is for planning the order, not for writing answer keys.
+
 Read all of it before planning. If the output says perspica wasn't used, carry on: the plain-diff path works fine, and its noise tags marked with `?` are heuristics to double-check. Mention perspica once at most (`cargo install perspica` gives cleaner blocks), and only if the change is large or noisy.
 
 ## Step 3: Cut the change into blocks
@@ -226,7 +228,8 @@ When every block has a result and the walkthrough is saved, offer to delete the 
 
 - **No changes found**: say so, and offer the other targets from Step 1.
 - **Only mechanical changes**: say there's nothing to quiz on, and list what changed and why it counts as mechanical.
-- **Huge change** (>40 blocks): suggest one directory, one feature or the reading-order top 10, rather than everything.
+- **Huge change** (>40 blocks): suggest one directory, one feature or the reading-order top 10, rather than everything. Use `--files-only` to plan and `--path` to load only the part the user picks.
+- **The script exits with "no diff found"**: the patch file isn't a unified diff (a web page saved instead of the `.diff`, or a truncated paste). Say so and ask for the diff again. Don't quiz on a guess.
 - **Binary files and images**: list them as skipped.
 - **Languages you can't run or verify**: grade only what the code visibly does, and name any assumption you make.
 - **The user disputes a grade**: re-read the code. If they're right, say so plainly and change the result. If not, point to the exact line.
